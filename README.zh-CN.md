@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> 本仓库 fork 自 [chenyme/grok2api](https://github.com/chenyme/grok2api)。
+>
+> **相对上游的改动**
+> - 质量守护主动探测不再借用其他节点的账号。探测只使用明确绑定到被测节点的 Grok Build 账号；该节点没有可调度账号时返回 `egressQualityProbeNoAccount`，sidecar 按 `noAccountBackoff` 退避。
+> - 适合一账号绑一节点：`/request-audits` 里质量守护审计的账号与出口代理保持一致。账号绑定应保持手动固定，不要开启自动再分配，否则节点被隔离后账号会被迁走，复测会一直无账号。
+
 <p align="center">
   <img alt="Grok2API" src="./frontend/public/grok2api.png" width="720" />
 </p>

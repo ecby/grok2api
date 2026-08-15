@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> This repository is a fork of [chenyme/grok2api](https://github.com/chenyme/grok2api).
+>
+> **Changes from upstream**
+> - Quality-guard active probes no longer borrow accounts from other nodes. A probe uses only a Grok Build account bound to the node under test. If that node has no schedulable account, the probe returns `egressQualityProbeNoAccount` and the sidecar backs off with `noAccountBackoff`.
+> - Intended for one-account-per-node bindings: quality-guard rows on `/request-audits` keep the account and egress proxy consistent. Keep bindings manual. Auto-reassignment will move accounts off a quarantined node, and recovery probes will keep failing with no account.
+
 <p align="center">
   <img alt="Grok2API" src="./frontend/public/grok2api.png" width="720" />
 </p>
