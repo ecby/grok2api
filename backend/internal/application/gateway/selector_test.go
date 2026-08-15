@@ -147,7 +147,7 @@ func TestSelectorQualityProbePinsAccountToRequestedEgressNode(t *testing.T) {
 	}
 }
 
-func TestSelectorQualityProbeBorrowsHealthyAccountForUnavailableNode(t *testing.T) {
+func TestSelectorQualityProbeDoesNotBorrowAccountFromOtherNode(t *testing.T) {
 	ctx := context.Background()
 	database, err := relational.OpenSQLite(ctx, filepath.Join(t.TempDir(), "selector-egress-fallback.db"))
 	if err != nil {
@@ -174,21 +174,21 @@ func TestSelectorQualityProbeBorrowsHealthyAccountForUnavailableNode(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	healthy, _, err := accounts.UpsertByIdentity(ctx, account.Credential{
+	if _, _, err = accounts.UpsertByIdentity(ctx, account.Credential{
 		Provider: account.ProviderBuild, Name: "healthy", SourceKey: "healthy", EncryptedAccessToken: "encrypted",
 		Enabled: true, AuthStatus: account.AuthStatusActive, MaxConcurrent: 1, EgressNodeID: healthyNode.ID,
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 	selector := NewSelector(accounts, memory.NewConcurrencyLimiter(), memory.NewStickyStore(), nil, time.Hour, time.Second, time.Minute)
 	lease, err := selector.AcquireForKeyOnEgressNode(ctx, account.ProviderBuild, 0, "grok-test", "", "ordinary-affinity", nil, false, clientkeydomain.AccountScope{}, targetNode.ID)
-	if err != nil {
-		t.Fatal(err)
+	if lease != nil {
+		lease.Release()
+		t.Fatal("quality probe must not borrow an account bound to another node")
 	}
-	defer lease.Release()
-	if lease.Credential.ID != healthy.ID {
-		t.Fatalf("selected account=%d, want borrowed healthy account=%d", lease.Credential.ID, healthy.ID)
+	var unavailable *SelectionUnavailableError
+	if !errors.As(err, &unavailable) || unavailable.Reason != SelectionNoAccounts {
+		t.Fatalf("error = %v", err)
 	}
 }
 

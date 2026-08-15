@@ -13,7 +13,7 @@ your own traffic before allowing automatic quarantine.
 ## Scope and prerequisites
 
 - Supports Grok Build streaming requests after egress nodes and request audits are configured in grok2api.
-- At least one schedulable Grok Build account must be able to serve the probe model. The account does not have to be bound to every managed node.
+- Each probed node needs a schedulable Grok Build account bound to that node and able to serve the probe model.
 - The built-in thinking guard is enforced only when the backend recognizes the configured Build model as reasoning-capable. Keep the default `grok-4.5` or another verified reasoning model when missing-thinking detection is required; unknown and non-reasoning models retain marker/TPS checks without this signal.
 - The main service automatically provisions a non-exportable system probe identity. The sidecar reaches only a scoped internal API over the Compose network.
 - Classification is heuristic evidence. It cannot prove that upstream model capability changed and does not replace application-level regression tests.
@@ -26,11 +26,11 @@ your own traffic before allowing automatic quarantine.
 2. Active mode calls a quality-guard-only internal probe endpoint. The scoped
    credential cannot access account exports, administrator management, or the
    rest of the administrator API.
-3. grok2api prefers an account bound to that node. If none is schedulable, it
-   borrows any healthy account while still forcing the physical request through
-   the node under test, then sends a fixed streaming prompt. The backend pins
-   the route to Grok Build even when another provider exposes the same public
-   model name.
+3. grok2api uses only an account bound to that node, then sends a fixed
+   streaming prompt through the node under test. If that node has no
+   schedulable account, the probe returns `egressQualityProbeNoAccount`
+   and the guard backs off. The backend pins the route to Grok Build even
+   when another provider exposes the same public model name.
 4. The fixed probe checks output tokens, chunk cadence, first-token time,
    instruction-marker compliance, and panel-equivalent output-token throughput.
 5. A production request at either passive TPS threshold quarantines the node
@@ -42,7 +42,7 @@ your own traffic before allowing automatic quarantine.
 
 The public inference API cannot request a specific egress node or bypass a
 disabled node. This capability is confined to the authenticated internal route.
-Ambiguous probe-only 403 responses do not cool borrowed accounts; definitive
+Ambiguous probe-only 403 responses do not cool the node's bound account; definitive
 credential, account-block, and quota signals retain their normal transitions.
 
 ## Operating modes
@@ -81,7 +81,7 @@ contract for 1024Proxy-style usernames containing `sid-...-t-...`.
 
 Probe failures require `qualityGuard.consecutiveErrors` consecutive attempts
 before quarantine. Account-selection failures are reported separately: if the
-entire Grok Build pool has no schedulable account, the guard backs off for
+node has no schedulable bound account, the guard backs off for
 `qualityGuard.noAccountBackoff` and suppresses duplicate logs without
 counting a proxy failure or rotating the IP. The node remains isolated until a
 real model-quality probe can pass.

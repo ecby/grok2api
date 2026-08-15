@@ -427,24 +427,15 @@ func (s *Selector) AcquireForKey(ctx context.Context, provider account.Provider,
 	return s.acquire(ctx, provider, modelRouteID, upstreamModel, quotaMode, affinityKey, excluded, allowQuotaProbe, scope, 0)
 }
 
-// AcquireForKeyOnEgressNode is reserved for administrator probes. It prefers a
-// credential bound to the requested node, then borrows any schedulable
-// credential when the node's own accounts are unavailable. The request layer
-// still forces the physical call through nodeID.
+// AcquireForKeyOnEgressNode is reserved for administrator probes. It only
+// selects a credential bound to the requested node. The request layer still
+// forces the physical call through nodeID so a disabled or cooling node can
+// be tested without changing that account binding.
 func (s *Selector) AcquireForKeyOnEgressNode(ctx context.Context, provider account.Provider, modelRouteID uint64, upstreamModel, quotaMode, affinityKey string, excluded map[uint64]bool, allowQuotaProbe bool, scope clientkeydomain.AccountScope, nodeID uint64) (*accountLease, error) {
 	if nodeID == 0 {
 		return nil, &SelectionUnavailableError{Reason: SelectionNoAccounts, Scope: scope}
 	}
-	lease, err := s.acquire(ctx, provider, modelRouteID, upstreamModel, quotaMode, affinityKey, excluded, allowQuotaProbe, scope, nodeID)
-	if err == nil {
-		return lease, nil
-	}
-	var unavailable *SelectionUnavailableError
-	if !errors.As(err, &unavailable) {
-		return nil, err
-	}
-	// Probe borrowing must not create or reuse ordinary sticky affinity.
-	return s.acquire(ctx, provider, modelRouteID, upstreamModel, quotaMode, "", excluded, allowQuotaProbe, scope, 0)
+	return s.acquire(ctx, provider, modelRouteID, upstreamModel, quotaMode, affinityKey, excluded, allowQuotaProbe, scope, nodeID)
 }
 
 func (s *Selector) acquire(ctx context.Context, provider account.Provider, modelRouteID uint64, upstreamModel, quotaMode, affinityKey string, excluded map[uint64]bool, allowQuotaProbe bool, requestedScope clientkeydomain.AccountScope, forcedEgressNodeID uint64) (lease *accountLease, err error) {
