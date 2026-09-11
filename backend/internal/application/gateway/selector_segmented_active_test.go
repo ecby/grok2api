@@ -72,6 +72,23 @@ func benchmarkSegmentedSelector(b *testing.B, candidateCount int, enabled, force
 	}
 }
 
+func TestSegmentedActiveSkipsCredentialMaterialLoadError(t *testing.T) {
+	limiter := newSegmentedSelectiveLimiter()
+	selector := newSegmentedActiveTestSelector(100, limiter, nil)
+	selector.UpdateSegmentedSelector(true, 100, 8)
+	repo := selector.accounts.(*layeredAccountRepository)
+	repo.materialErrors = map[uint64]error{1: sqliteRoutingLoadError{code: 5}}
+
+	lease, err := selector.Acquire(context.Background(), account.ProviderBuild, 0, "model", "", "", nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.Release()
+	if lease.Credential.ID != 2 {
+		t.Fatalf("selected account = %d, want 2 after skipping material load error", lease.Credential.ID)
+	}
+}
+
 func TestSegmentedActiveReadsOnlyFirstAvailableWindow(t *testing.T) {
 	limiter := newSegmentedSelectiveLimiter()
 	selector := newSegmentedActiveTestSelector(100, limiter, nil)
@@ -241,6 +258,27 @@ func TestSegmentedActiveCohortOrderingMatchesFullPlannerHardOrder(t *testing.T) 
 				t.Fatalf("cohort order mismatch at %d/%d: got %t want %t", leftIndex, rightIndex, got, want)
 			}
 		}
+	}
+}
+
+func TestSegmentedCohortsUseEffectiveWebCatalogCapability(t *testing.T) {
+	values := []account.RoutingCandidate{
+		{
+			Credential:           account.Credential{ID: 1, Provider: account.ProviderWeb, WebTier: account.WebTierBasic},
+			ModelCapabilityKnown: true,
+			SupportsModel:        false, // stale snapshot from before Basic support
+		},
+		{
+			Credential:           account.Credential{ID: 2, Provider: account.ProviderWeb, WebTier: account.WebTierSuper},
+			ModelCapabilityKnown: true,
+			SupportsModel:        true,
+		},
+	}
+	cohorts := segmentedCandidateCohorts(values, nil, time.Now().UTC(), []account.WebTier{
+		account.WebTierBasic, account.WebTierSuper, account.WebTierHeavy,
+	}, false, 0, 1, 2)
+	if len(cohorts) != 2 || len(cohorts[0].indexes) != 1 || cohorts[0].indexes[0] != 0 {
+		t.Fatalf("segmented Web cohorts = %#v, want Basic account first", cohorts)
 	}
 }
 
